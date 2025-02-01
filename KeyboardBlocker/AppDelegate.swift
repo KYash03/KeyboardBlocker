@@ -18,7 +18,7 @@ extension NSAlert {
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     private enum UIConstants {
-        static let windowSize = NSSize(width: 300, height: 400)
+        static let windowSize = NSSize(width: 300, height: 500)
         static let padding: CGFloat = 20
         static let spacing: CGFloat = 12
     }
@@ -29,10 +29,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var timer: Timer?
     private var remainingSeconds: Int = 0
+    private var isIndefiniteBlocking: Bool = false
 
     private var accessibilityCheckTimer: Timer?
     private var wasAccessibilityTrusted: Bool = false
     private var blockButtons: [NSButton] = []
+
+    private var indefiniteBlockButton: NSButton!
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         promptForAccessibilityPermission()
@@ -76,7 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func checkAccessibilityPermissions() {
         let effectiveAccess = isAccessibilityEffectivelyAvailable()
 
-        if !effectiveAccess && timer != nil {
+        if !effectiveAccess && (timer != nil || isIndefiniteBlocking) {
             stopBlocking()
             NSAlert.show(
                 message: "Accessibility Permission Revoked",
@@ -130,7 +133,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         addBlockButton("Block for 30 seconds", seconds: 30, to: stackView)
         addBlockButton("Block for 60 seconds", seconds: 60, to: stackView)
-        addBlockButton("Block for 90 seconds", seconds: 90, to: stackView)
 
         let customButton = makeButton(
             title: "Custom Block Duration",
@@ -138,6 +140,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         stackView.addArrangedSubview(customButton)
         blockButtons.append(customButton)
+
+        indefiniteBlockButton = makeButton(
+            title: "Disable Keyboard Indefinitely",
+            action: #selector(toggleIndefiniteBlocking)
+        )
+        stackView.addArrangedSubview(indefiniteBlockButton)
+        blockButtons.append(indefiniteBlockButton)
 
         let stopButton = makeButton(
             title: "Stop Blocking",
@@ -156,7 +165,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ title: String, seconds: Int, to stackView: NSStackView
     ) {
         let button = makeButton(
-            title: title, action: #selector(handleBlockButton(_:)))
+            title: title,
+            action: #selector(handleBlockButton(_:))
+        )
         button.tag = seconds
         stackView.addArrangedSubview(button)
         blockButtons.append(button)
@@ -204,6 +215,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleBlockButton(_ sender: NSButton) {
+        if isIndefiniteBlocking {
+            return
+        }
         startBlocking(for: sender.tag)
     }
 
@@ -228,7 +242,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if response == .alertFirstButtonReturn {
             NSAlert.show(
                 message: "Invalid Duration",
-                info: "Please enter a valid number of seconds.")
+                info: "Please enter a valid number of seconds."
+            )
         }
     }
 
@@ -241,6 +256,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return
         }
+
+        if isIndefiniteBlocking { return }
 
         if timer != nil {
             remainingSeconds += seconds
@@ -278,17 +295,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func stopBlocking() {
+    @objc private func toggleIndefiniteBlocking(_ sender: NSButton) {
+        guard AXIsProcessTrusted() else {
+            NSAlert.show(
+                message: "Accessibility Not Enabled",
+                info:
+                    "Please grant accessibility permissions in System Preferences and try again."
+            )
+            return
+        }
+
+        if !isIndefiniteBlocking {
+            if timer != nil {
+                timer?.invalidate()
+                timer = nil
+                remainingSeconds = 0
+            }
+            guard inputBlocker.startBlocking() else { return }
+            isIndefiniteBlocking = true
+            sender.title = "Enable Keyboard"
+            timerLabel.stringValue = "Keyboard Blocker (Indefinite)"
+        } else {
+            stopBlocking()
+            sender.title = "Disable Keyboard Indefinitely"
+        }
+    }
+
+    @objc func stopBlocking() {
         timer?.invalidate()
         timer = nil
         remainingSeconds = 0
+        isIndefiniteBlocking = false
         inputBlocker.stopBlocking()
         updateStatusLabel()
+        indefiniteBlockButton.title = "Disable Keyboard Indefinitely"
     }
 
     private func updateStatusLabel() {
         DispatchQueue.main.async {
-            if self.timer != nil {
+            if self.isIndefiniteBlocking {
+                self.timerLabel.stringValue = "Keyboard Blocker (Indefinite)"
+            } else if self.timer != nil {
                 self.timerLabel.stringValue =
                     "Keyboard Blocker (\(self.remainingSeconds)s)"
             } else {
@@ -318,6 +365,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if !effectiveAccess {
                 self.timerLabel.stringValue =
                     "Accessibility permission required"
+            } else if self.isIndefiniteBlocking {
+                self.timerLabel.stringValue = "Keyboard Blocker (Indefinite)"
             } else if self.timer != nil {
                 self.timerLabel.stringValue =
                     "Keyboard Blocker (\(self.remainingSeconds)s)"
