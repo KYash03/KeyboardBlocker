@@ -5,18 +5,19 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
-    private var blockMenuItems: [NSMenuItem] = []
-    private var toggleBlockItem: NSMenuItem?
-
     private let inputBlocker = InputBlocker()
     private var isBlocking = false
 
     private var accessibilityCheckTimer: Timer?
     private var wasAccessibilityTrusted = false
 
+    private var toggleBlockItem: NSMenuItem?
+    private var blockMenuItems: [NSMenuItem] = []
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestAccessibilityPermissions()
         setupStatusItem()
+
         wasAccessibilityTrusted = AXIsProcessTrusted()
         updateUIForBlockingState()
         startAccessibilityCheckTimer()
@@ -63,16 +64,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkAccessibilityPermissions() {
         let hasAccess = isAccessibilityEffectivelyAvailable()
+
         if !hasAccess && isBlocking {
             stopBlocking()
             NSAlert.show(
-                message: "Accessibility Permission Revoked",
+                message: "Keyboard Blocking Stopped",
                 info:
-                    "Blocking has been stopped because accessibility permission was revoked."
+                    """
+                    Accessibility permissions seem to be revoked.
+                    Please re-grant permission to continue blocking the keyboard.
+                    """
             )
         } else if !wasAccessibilityTrusted && hasAccess {
             restartApp()
         }
+
         wasAccessibilityTrusted = hasAccess
         updateBlockMenuItems()
     }
@@ -80,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "KB"
+        statusItem.button?.title = "Keyboard: On"
         statusItem.menu = createMenu()
     }
 
@@ -99,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let toggleItem = NSMenuItem(
-            title: "Block Keyboard",
+            title: "Disable Keyboard",
             action: #selector(toggleBlocking(_:)),
             keyEquivalent: ""
         )
@@ -111,7 +117,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit",
+            title: "Quit App",
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -123,8 +129,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateUIForBlockingState() {
         DispatchQueue.main.async {
-            let title = self.isBlocking ? "KB (Blocked)" : "KB"
-            self.statusItem.button?.title = title
+            self.statusItem.button?.title =
+                self.isBlocking ? "Keyboard: Off" : "Keyboard: On"
         }
         updateBlockMenuItems()
     }
@@ -132,21 +138,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateBlockMenuItems() {
         let effectiveAccess = isAccessibilityEffectivelyAvailable()
         blockMenuItems.forEach { $0.isEnabled = effectiveAccess }
+
         if let toggleBlockItem = toggleBlockItem {
             toggleBlockItem.title =
-                isBlocking ? "Enable Keyboard" : "Block Keyboard"
+                isBlocking ? "Enable Keyboard" : "Disable Keyboard"
         }
     }
 
     @objc private func toggleBlocking(_ sender: NSMenuItem) {
         guard AXIsProcessTrusted() else {
             NSAlert.show(
-                message: "Accessibility Not Enabled",
+                message: "Accessibility Required",
                 info:
-                    "Please grant accessibility permissions in System Preferences and try again."
+                    """
+                    This app needs accessibility permissions to block the keyboard.
+                    Please grant permission in:
+                    System Settings → Privacy & Security → Accessibility.
+                    """
             )
             return
         }
+
         isBlocking.toggle()
         if isBlocking {
             guard inputBlocker.startBlocking() else {
@@ -177,9 +189,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func restartApp() {
         accessibilityCheckTimer?.invalidate()
         accessibilityCheckTimer = nil
+
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = ["-n", Bundle.main.bundlePath]
+
         do {
             try task.run()
         } catch {

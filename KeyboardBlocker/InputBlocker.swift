@@ -34,9 +34,13 @@ class InputBlocker {
         else {
             DispatchQueue.main.async {
                 NSAlert.show(
-                    message: "Failed to create event tap",
+                    message: "Unable to Block the Keyboard",
                     info:
-                        "Please ensure the app has accessibility permissions in System Preferences."
+                        """
+                        The app could not create a keyboard-event tap. 
+                        Please ensure this app is allowed to control your Mac in:
+                        System Settings → Privacy & Security → Accessibility.
+                        """
                 )
             }
             return false
