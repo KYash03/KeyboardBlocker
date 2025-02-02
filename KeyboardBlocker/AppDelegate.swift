@@ -59,6 +59,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
         CGEvent.tapEnable(tap: tap, enable: false)
+
+        let machPort = CFMachPortCreateRunLoopSource(nil, tap, 0)
+        if let runLoopSource = machPort {
+            CFRunLoopAddSource(
+                CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFRunLoopRemoveSource(
+                CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        }
+        CFMachPortInvalidate(tap)
+
         return true
     }
 
