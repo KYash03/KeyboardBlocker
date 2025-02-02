@@ -6,3 +6,6 @@ The app uses macOS’s accessibility APIs to intercept and block keyboard events
 
 # Why I created it:
 I built this because I needed a way to clean my keyboard without accidentally hitting keys. While there are other solutions out there, many are closed-source and I was concerned about privacy. It turned out to be a relatively simple project, so I decided to share my open source version with everyone.
+
+# Download:
+Download the app from the Releases section on the right.
