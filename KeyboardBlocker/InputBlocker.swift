@@ -16,8 +16,8 @@ class InputBlocker {
             | (1 << CGEventType.systemDefined.rawValue)
 
         let callback: CGEventTapCallBack = { _, _, event, _ in
-            guard AXIsProcessTrusted() else {
-                return Unmanaged.passRetained(event)
+            if !AXIsProcessTrusted() {
+                return Unmanaged.passUnretained(event)
             }
             return nil
         }
@@ -60,6 +60,7 @@ class InputBlocker {
     func stopBlocking() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)

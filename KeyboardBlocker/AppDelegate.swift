@@ -24,11 +24,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityPermissions() {
-        let options: CFDictionary =
-            [
-                kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString:
-                    true
-            ] as CFDictionary
+        let promptKey =
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let options: CFDictionary = [promptKey: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
@@ -51,17 +49,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 options: .defaultTap,
                 eventsOfInterest: mask,
                 callback: { _, _, event, _ in
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 },
                 userInfo: nil
             )
         else {
             return false
         }
-        CGEvent.tapEnable(tap: tap, enable: false)
 
-        let machPort = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        if let runLoopSource = machPort {
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0) {
             CFRunLoopAddSource(
                 CFRunLoopGetCurrent(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -69,7 +66,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         }
         CFMachPortInvalidate(tap)
-
         return true
     }
 
@@ -157,7 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleBlocking(_ sender: NSMenuItem) {
-        guard AXIsProcessTrusted() else {
+        guard isAccessibilityEffectivelyAvailable() else {
             NSAlert.show(
                 message: "Accessibility Required",
                 info:
