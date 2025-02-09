@@ -4,10 +4,14 @@ import Cocoa
 final class InputBlocker {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    deinit {
+        stopBlocking()
+    }
 
     @discardableResult
     func startBlocking() -> Bool {
         guard eventTap == nil else { return true }
+
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
@@ -15,8 +19,10 @@ final class InputBlocker {
             | (1 << CGEventType.systemDefined.rawValue)
         let callback: CGEventTapCallBack = { _, _, event, _ in
             return cachedAccessibilityTrusted
-                ? nil : Unmanaged.passUnretained(event)
+                ? nil
+                : Unmanaged.passUnretained(event)
         }
+
         guard
             let tap = CGEvent.tapCreate(
                 tap: .cgSessionEventTap,
@@ -40,11 +46,14 @@ final class InputBlocker {
             return false
         }
         eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(
+
+        if let source = CFMachPortCreateRunLoopSource(
             kCFAllocatorDefault, tap, 0)
-        if let source = runLoopSource {
+        {
+            runLoopSource = source
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
+
         CGEvent.tapEnable(tap: tap, enable: true)
         return true
     }
@@ -55,6 +64,7 @@ final class InputBlocker {
             CFMachPortInvalidate(tap)
         }
         if let source = runLoopSource {
+            CFRunLoopSourceInvalidate(source)
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
         eventTap = nil

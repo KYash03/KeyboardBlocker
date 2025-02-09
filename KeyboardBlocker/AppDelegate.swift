@@ -29,6 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startAccessibilityCheckTimer()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        accessibilityCheckTimer?.invalidate()
+        inputBlocker.stopBlocking()
+    }
+
     private func requestAccessibilityPermissions() {
         let promptKey =
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
@@ -38,39 +43,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startAccessibilityCheckTimer() {
         accessibilityCheckTimer = Timer.scheduledTimer(
-            timeInterval: 1.0,
-            target: self,
-            selector: #selector(checkAccessibilityPermissions),
-            userInfo: nil,
-            repeats: true
-        )
+            withTimeInterval: 1.0, repeats: true
+        ) { [weak self] _ in
+            self?.checkAccessibilityPermissions()
+        }
     }
 
     private func isAccessibilityEffectivelyAvailable() -> Bool {
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
-        guard
-            let tap = CGEvent.tapCreate(
-                tap: .cgSessionEventTap,
-                place: .headInsertEventTap,
-                options: .defaultTap,
-                eventsOfInterest: mask,
-                callback: { _, _, event, _ in
-                    return Unmanaged.passUnretained(event)
-                },
-                userInfo: nil
-            )
-        else {
-            return false
+        var available = false
+        autoreleasepool {
+            guard
+                let tap = CGEvent.tapCreate(
+                    tap: .cgSessionEventTap,
+                    place: .headInsertEventTap,
+                    options: .defaultTap,
+                    eventsOfInterest: mask,
+                    callback: { _, _, event, _ in
+                        return Unmanaged.passUnretained(event)
+                    },
+                    userInfo: nil
+                )
+            else {
+                available = false
+                return
+            }
+            CFMachPortInvalidate(tap)
+            available = true
         }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        if let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0) {
-            let runLoop = CFRunLoopGetCurrent()
-            CFRunLoopAddSource(runLoop, runLoopSource, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: false)
-            CFRunLoopRemoveSource(runLoop, runLoopSource, .commonModes)
-        }
-        CFMachPortInvalidate(tap)
-        return true
+        return available
     }
 
     @objc private func checkAccessibilityPermissions() {
@@ -95,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+
         let accessibilityItem = NSMenuItem(
             title: "Open Accessibility Settings",
             action: #selector(openAccessibilitySettings),
@@ -103,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityItem.target = self
         menu.addItem(accessibilityItem)
         menu.addItem(.separator())
+
         let toggleItem = NSMenuItem(
             title: "Disable Keyboard",
             action: #selector(toggleBlocking(_:)),
@@ -113,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleBlockItem = toggleItem
         blockMenuItems.append(toggleItem)
         menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: "Quit App",
             action: #selector(quitApp),
@@ -120,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         quitItem.target = self
         menu.addItem(quitItem)
+
         return menu
     }
 
