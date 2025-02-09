@@ -2,7 +2,7 @@ import ApplicationServices
 import Cocoa
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var statusItem: NSStatusItem = {
         let item = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.variableLength)
@@ -15,7 +15,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isBlocking = false {
         didSet { updateUIForBlockingState() }
     }
-
     private var accessibilityCheckTimer: Timer?
     private var wasAccessibilityTrusted = cachedAccessibilityTrusted
     private weak var toggleBlockItem: NSMenuItem?

@@ -1,7 +1,7 @@
 import ApplicationServices
 import Cocoa
 
-class InputBlocker {
+final class InputBlocker {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
