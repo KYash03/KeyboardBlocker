@@ -3,7 +3,6 @@ import Cocoa
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
-
     private lazy var statusItem: NSStatusItem = {
         let item = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.variableLength)
@@ -14,13 +13,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let inputBlocker = InputBlocker()
     private var isBlocking = false {
-        didSet {
-            updateUIForBlockingState()
-        }
+        didSet { updateUIForBlockingState() }
     }
 
     private var accessibilityCheckTimer: Timer?
-    private var wasAccessibilityTrusted = false
+    private var wasAccessibilityTrusted = cachedAccessibilityTrusted
     private weak var toggleBlockItem: NSMenuItem?
     private var blockMenuItems: [NSMenuItem] = []
 
@@ -28,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         requestAccessibilityPermissions()
         _ = statusItem
         wasAccessibilityTrusted = AXIsProcessTrusted()
+        cachedAccessibilityTrusted = wasAccessibilityTrusted
         updateUIForBlockingState()
         startAccessibilityCheckTimer()
     }
@@ -35,8 +33,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func requestAccessibilityPermissions() {
         let promptKey =
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options: [String: Bool] = [promptKey: true]
-        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        let options = [promptKey: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 
     private func startAccessibilityCheckTimer() {
@@ -78,12 +76,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkAccessibilityPermissions() {
         let hasAccess = isAccessibilityEffectivelyAvailable()
+        cachedAccessibilityTrusted = hasAccess
         if !hasAccess && isBlocking {
             stopBlocking()
             NSAlert.show(
                 message: "Keyboard Blocking Stopped",
-                info:
-                    """
+                info: """
                     Accessibility permissions seem to be revoked.
                     Please re-grant permission to continue blocking the keyboard.
                     """
@@ -135,18 +133,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateBlockMenuItems() {
-        let effectiveAccess = isAccessibilityEffectivelyAvailable()
+        let effectiveAccess = cachedAccessibilityTrusted
         blockMenuItems.forEach { $0.isEnabled = effectiveAccess }
         toggleBlockItem?.title =
             isBlocking ? "Enable Keyboard" : "Disable Keyboard"
     }
 
     @objc private func toggleBlocking(_ sender: NSMenuItem) {
-        guard isAccessibilityEffectivelyAvailable() else {
+        guard cachedAccessibilityTrusted else {
             NSAlert.show(
                 message: "Accessibility Required",
-                info:
-                    """
+                info: """
                     This app needs accessibility permissions to block the keyboard.
                     Please grant permission in:
                     System Settings → Privacy & Security → Accessibility.

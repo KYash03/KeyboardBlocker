@@ -1,8 +1,10 @@
 import ApplicationServices
 import Cocoa
 
+var cachedAccessibilityTrusted: Bool = AXIsProcessTrusted()
+
 extension CGEventType {
-    static let systemDefined: CGEventType = CGEventType(rawValue: 14)!
+    static let systemDefined = CGEventType(rawValue: 14)!
 }
 
 extension NSAlert {

@@ -2,7 +2,6 @@ import ApplicationServices
 import Cocoa
 
 class InputBlocker {
-
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -15,7 +14,8 @@ class InputBlocker {
             | (1 << CGEventType.flagsChanged.rawValue)
             | (1 << CGEventType.systemDefined.rawValue)
         let callback: CGEventTapCallBack = { _, _, event, _ in
-            return AXIsProcessTrusted() ? nil : Unmanaged.passUnretained(event)
+            return cachedAccessibilityTrusted
+                ? nil : Unmanaged.passUnretained(event)
         }
         guard
             let tap = CGEvent.tapCreate(
@@ -30,8 +30,7 @@ class InputBlocker {
             DispatchQueue.main.async {
                 NSAlert.show(
                     message: "Unable to Block the Keyboard",
-                    info:
-                        """
+                    info: """
                         The app could not create a keyboard-event tap.
                         Please ensure this app is allowed to control your Mac in:
                         System Settings → Privacy & Security → Accessibility.
