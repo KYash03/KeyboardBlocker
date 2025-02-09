@@ -4,20 +4,29 @@ import Cocoa
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    private var statusItem: NSStatusItem!
+    private lazy var statusItem: NSStatusItem = {
+        let item = NSStatusBar.system.statusItem(
+            withLength: NSStatusItem.variableLength)
+        item.button?.title = "Keyboard: On"
+        item.menu = createMenu()
+        return item
+    }()
+
     private let inputBlocker = InputBlocker()
-    private var isBlocking = false
+    private var isBlocking = false {
+        didSet {
+            updateUIForBlockingState()
+        }
+    }
 
     private var accessibilityCheckTimer: Timer?
     private var wasAccessibilityTrusted = false
-
-    private var toggleBlockItem: NSMenuItem?
+    private weak var toggleBlockItem: NSMenuItem?
     private var blockMenuItems: [NSMenuItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestAccessibilityPermissions()
-        setupStatusItem()
-
+        _ = statusItem
         wasAccessibilityTrusted = AXIsProcessTrusted()
         updateUIForBlockingState()
         startAccessibilityCheckTimer()
@@ -26,8 +35,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func requestAccessibilityPermissions() {
         let promptKey =
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options: CFDictionary = [promptKey: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        let options: [String: Bool] = [promptKey: true]
+        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
     }
 
     private func startAccessibilityCheckTimer() {
@@ -56,14 +65,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         else {
             return false
         }
-
         CGEvent.tapEnable(tap: tap, enable: false)
         if let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0) {
-            CFRunLoopAddSource(
-                CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            let runLoop = CFRunLoopGetCurrent()
+            CFRunLoopAddSource(runLoop, runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: false)
-            CFRunLoopRemoveSource(
-                CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            CFRunLoopRemoveSource(runLoop, runLoopSource, .commonModes)
         }
         CFMachPortInvalidate(tap)
         return true
@@ -71,7 +78,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkAccessibilityPermissions() {
         let hasAccess = isAccessibilityEffectivelyAvailable()
-
         if !hasAccess && isBlocking {
             stopBlocking()
             NSAlert.show(
@@ -85,22 +91,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if !wasAccessibilityTrusted && hasAccess {
             restartApp()
         }
-
         wasAccessibilityTrusted = hasAccess
         updateBlockMenuItems()
-    }
-
-    private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(
-            withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "Keyboard: On"
-        statusItem.menu = createMenu()
     }
 
     private func createMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-
         let accessibilityItem = NSMenuItem(
             title: "Open Accessibility Settings",
             action: #selector(openAccessibilitySettings),
@@ -108,9 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         accessibilityItem.target = self
         menu.addItem(accessibilityItem)
-
         menu.addItem(.separator())
-
         let toggleItem = NSMenuItem(
             title: "Disable Keyboard",
             action: #selector(toggleBlocking(_:)),
@@ -120,9 +115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(toggleItem)
         toggleBlockItem = toggleItem
         blockMenuItems.append(toggleItem)
-
         menu.addItem(.separator())
-
         let quitItem = NSMenuItem(
             title: "Quit App",
             action: #selector(quitApp),
@@ -130,7 +123,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         quitItem.target = self
         menu.addItem(quitItem)
-
         return menu
     }
 
@@ -145,11 +137,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateBlockMenuItems() {
         let effectiveAccess = isAccessibilityEffectivelyAvailable()
         blockMenuItems.forEach { $0.isEnabled = effectiveAccess }
-
-        if let toggleBlockItem = toggleBlockItem {
-            toggleBlockItem.title =
-                isBlocking ? "Enable Keyboard" : "Disable Keyboard"
-        }
+        toggleBlockItem?.title =
+            isBlocking ? "Enable Keyboard" : "Disable Keyboard"
     }
 
     @objc private func toggleBlocking(_ sender: NSMenuItem) {
@@ -165,7 +154,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return
         }
-
         isBlocking.toggle()
         if isBlocking {
             guard inputBlocker.startBlocking() else {
@@ -175,13 +163,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             stopBlocking()
         }
-        updateUIForBlockingState()
     }
 
     private func stopBlocking() {
         isBlocking = false
         inputBlocker.stopBlocking()
-        updateUIForBlockingState()
     }
 
     @objc private func openAccessibilitySettings() {
@@ -196,11 +182,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func restartApp() {
         accessibilityCheckTimer?.invalidate()
         accessibilityCheckTimer = nil
-
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = ["-n", Bundle.main.bundlePath]
-
         do {
             try task.run()
         } catch {

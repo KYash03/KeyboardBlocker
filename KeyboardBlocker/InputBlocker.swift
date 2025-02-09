@@ -2,26 +2,21 @@ import ApplicationServices
 import Cocoa
 
 class InputBlocker {
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
     @discardableResult
     func startBlocking() -> Bool {
         guard eventTap == nil else { return true }
-
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
             | (1 << CGEventType.systemDefined.rawValue)
-
         let callback: CGEventTapCallBack = { _, _, event, _ in
-            if !AXIsProcessTrusted() {
-                return Unmanaged.passUnretained(event)
-            }
-            return nil
+            return AXIsProcessTrusted() ? nil : Unmanaged.passUnretained(event)
         }
-
         guard
             let tap = CGEvent.tapCreate(
                 tap: .cgSessionEventTap,
@@ -37,7 +32,7 @@ class InputBlocker {
                     message: "Unable to Block the Keyboard",
                     info:
                         """
-                        The app could not create a keyboard-event tap. 
+                        The app could not create a keyboard-event tap.
                         Please ensure this app is allowed to control your Mac in:
                         System Settings → Privacy & Security → Accessibility.
                         """
@@ -45,11 +40,9 @@ class InputBlocker {
             }
             return false
         }
-
         eventTap = tap
         runLoopSource = CFMachPortCreateRunLoopSource(
             kCFAllocatorDefault, tap, 0)
-
         if let source = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
